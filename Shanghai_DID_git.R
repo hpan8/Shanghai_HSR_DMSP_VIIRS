@@ -1,7 +1,7 @@
 setwd("C:/Users/hpan8/Desktop/Shanghai_Night/Paper Writing/RS_Revision/new_data")
 rm(list=ls())
 
-
+set.seed(1213)
 
 library(ggplot2)
 library(reshape2)
@@ -10,8 +10,7 @@ library(AER)
 library(ivpack)
 library(plm)
 library(punitroots)
-
-
+library(lmtest)
 library(raster)
 library(dplyr)
 library(ggplot2)
@@ -89,6 +88,7 @@ library(rgdal)
 
 #load design matrix of data
 load("rs_rev_design.RData")
+
 ######dmsp data for HH10########
 
 # model 1 to model 4
@@ -113,9 +113,36 @@ mod_ivd = ivreg(light ~ pop_access+ GDP + Income + ser_rate +  as.factor(City_Co
                  GDP + Income + ser_rate + as.factor(City_Code) + RCT2 + as.factor(Year),
                data = data_hh) 
 
-summary(mod_ivd)
+#vce model
+data_hr = data_hh[sample(nrow(data_hh), 200000), ]
 
-#iv 2sls model
+
+
+p.df <- pdata.frame(data_hr, index = c("GDP"), drop.index = F, row.names = T)
+
+head(p.df)
+
+
+
+
+pm1 = plm(light ~  pop_access ,
+           data = p.df, model = "pooling", na.action = na.omit)
+
+
+
+# compute Stata like df-adjustment
+G <- length(unique(data_hr$GDP))
+N <- length(data_hr$GDP)
+dfa <- (G/(G - 1)) * (N - 1)/pm1$df.residual
+
+
+city_vcov <- dfa * vcovHC(pm1, type = "HC0", cluster = "group", adjust = T)
+coeftest(pm1, vcov = city_vcov)
+
+
+
+
+
 
 
 #report  results
@@ -126,10 +153,9 @@ stargazer(mod1, mod2, mod3, mod4, mod_ivd, title="HH10 effects on light growth",
 
 summary(mod_ivd, vcov = sandwich, df = Inf, diagnostics = TRUE)
 
-summary(mod_ivdnt, vcov = sandwich, df = Inf, diagnostics = TRUE)
 
 
-######dmsp data for nh13########
+######viir data for nh13########
 
 
 # 
@@ -153,6 +179,8 @@ summary(mod_ivdnt, vcov = sandwich, df = Inf, diagnostics = TRUE)
 # data_nn$Income = data_nn$Income/1000000
 # data_nn$RCT = data_nn$Rail/(data_nn$Rail+ data_nn$Road)
 
+#model 1 to 4
+
 modn1 = lm(light ~ as.factor(Year)*pop_access + GDP + Income + ser_rate + as.factor(City_Code),
           data = data_nn) 
 modn2 = lm(light ~ as.factor(Year)*pop_access + GDP + Income + as.factor(City_Code),
@@ -162,11 +190,46 @@ modn3 = lm(light ~ as.factor(Year)*pop_access + GDP + as.factor(City_Code),
 modn4 = lm(light ~ as.factor(Year)*pop_access +  as.factor(City_Code),
            data = data_nn)
 
-
+#iv 2sls model
 
 modn_ivd = ivreg(light ~  pop_access + GDP + Income + ser_rate + as.factor(City_Code) |
                    as.factor(Year) + GDP + Income + ser_rate + as.factor(City_Code) + RCT,
                  data = data_nn) 
+
+
+#vce model
+data_nr = data_nn[sample(nrow(data_nn), 200000), ]
+
+
+
+pn.df <- pdata.frame(data_nr, index = c("GDP"), drop.index = F, row.names = T)
+
+head(pn.df)
+
+
+
+
+pmn1 = plm(light ~  pop_access ,
+          data = pn.df, model = "pooling", na.action = na.omit)
+
+# compute Stata like df-adjustment
+G <- length(unique(data_hr$GDP))
+N <- length(data_hr$GDP)
+dfa <- (G/(G - 1)) * (N - 1)/pmn1$df.residual
+
+
+cityn_vcov <- dfa * vcovHC(pmn1, type = "HC0", cluster = "group", adjust = T)
+coeftest(pmn1, vcov = cityn_vcov)
+
+# compute Stata like df-adjustment
+G <- length(unique(data_nr$GDP))
+N <- length(data_nr$GDP)
+dfa <- (G/(G - 1)) * (N - 1)/pmn1$df.residual
+
+
+
+
+#report model results
 
 stargazer(modn1, modn2, modn3, modn4, modn_ivd, title="NH13 effects on light growth", align=TRUE, out="ligh_nh.html")
 
